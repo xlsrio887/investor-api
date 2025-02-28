@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const jwt = require("jsonwebtoken");
+const axios = require("axios");
 
 const app = express();
 const PORT = 10000;
@@ -10,30 +11,55 @@ const SECRET_KEY = "supersecretkey";
 app.use(cors());
 app.use(bodyParser.json());
 
-let investors = []; // Тут временно храним инвесторов (можно заменить на базу данных)
+let investors = [
+  {
+    email: "test@example.com",
+    username: "Investor123",
+    privateKey: "random_private_key",
+    balance: 1000,
+    tvl: 5000,
+    yield: 7.5,
+    pools: [
+      {
+        name: "SOL/USDC",
+        hash: "0x123abc456def",
+        amount: 2500
+      }
+    ]
+  }
+];
 
-// ======================== 1. Регистрация ========================
+// **🔹 Регистрация**
 app.post("/register", (req, res) => {
-  const { email, privateKey } = req.body;
+  const { email, privateKey, username } = req.body;
+
   if (investors.find(user => user.email === email)) {
     return res.status(400).json({ message: "Этот email уже зарегистрирован" });
   }
 
-  const newUser = { 
-    email, 
-    privateKey, 
-    balance: 1000, 
-    tvl: 5000, 
-    yield: 7.5, 
-    pools: ["SOL/USDC", "ETH/USDC"] 
+  const newUser = {
+    email,
+    username,
+    privateKey,
+    balance: 1000,
+    tvl: 5000,
+    yield: 7.5,
+    pools: [
+      {
+        name: "SOL/USDC",
+        hash: "0x123abc456def",
+        amount: 2500
+      }
+    ]
   };
+
   investors.push(newUser);
 
   const token = jwt.sign({ email }, SECRET_KEY, { expiresIn: "24h" });
   res.json({ token, user: newUser });
 });
 
-// ======================== 2. Вход ========================
+// **🔹 Логин**
 app.post("/login", (req, res) => {
   const { email, privateKey } = req.body;
   const user = investors.find(user => user.email === email && user.privateKey === privateKey);
@@ -46,8 +72,8 @@ app.post("/login", (req, res) => {
   res.json({ token, user });
 });
 
-// ======================== 3. Получение данных пользователя ========================
-app.get("/me", (req, res) => {
+// **🔹 Получение данных пользователя + реальный курс SOL**
+app.get("/me", async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
 
   if (!token) {
@@ -62,13 +88,22 @@ app.get("/me", (req, res) => {
       return res.status(404).json({ message: "Пользователь не найден" });
     }
 
-    res.json(user);
+    // Получаем курс SOL из Coingecko
+    let solPrice = 0;
+    try {
+      const response = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd");
+      solPrice = response.data.solana.usd;
+    } catch (error) {
+      console.error("Ошибка получения курса SOL:", error);
+    }
+
+    res.json({ ...user, solPrice });
   } catch (err) {
     res.status(401).json({ message: "Токен недействителен" });
   }
 });
 
-// ======================== 4. Запуск сервера ========================
+// **🔹 Запуск сервера**
 app.listen(PORT, () => {
   console.log(`✅ Сервер запущен на порту ${PORT}`);
 });
