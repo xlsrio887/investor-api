@@ -1,25 +1,41 @@
-const express = require('express');
-const cors = require('cors');
-const { Pool } = require('pg');
-require('dotenv').config();
+const express = require("express");
+const cors = require("cors");
+const bodyParser = require("body-parser");
+const jwt = require("jsonwebtoken");
 
 const app = express();
-const port = process.env.PORT || 8080;
+const SECRET_KEY = "supersecretkey"; 
 
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+let investors = [];
+
+app.post("/register", (req, res) => {
+  const { email, privateKey } = req.body;
+  if (investors.find(user => user.email === email)) {
+    return res.status(400).json({ message: "Этот email уже зарегистрирован" });
+  }
+
+  const newUser = { email, privateKey, balance: 1000, tvl: 5000, yield: 7.5, pools: ["SOL/USDC", "ETH/USDC"] };
+  investors.push(newUser);
+
+  const token = jwt.sign({ email }, SECRET_KEY, { expiresIn: "24h" });
+  res.json({ token, user: newUser });
 });
 
-pool.connect()
-    .then(() => console.log('✅ Подключено к базе данных'))
-    .catch(err => console.error('Ошибка подключения к БД', err));
+app.post("/login", (req, res) => {
+  const { email, privateKey } = req.body;
+  const user = investors.find(user => user.email === email && user.privateKey === privateKey);
 
-app.get('/', (req, res) => res.send('API работает 🚀'));
+  if (!user) {
+    return res.status(401).json({ message: "Неверные данные" });
+  }
 
-app.listen(port, () => {
-    console.log(`✅ Сервер запущен на порту ${port}`);
+  const token = jwt.sign({ email }, SECRET_KEY, { expiresIn: "24h" });
+  res.json({ token, user });
+});
+
+app.listen(10000, () => {
+  console.log("Сервер запущен на порту 10000");
 });
